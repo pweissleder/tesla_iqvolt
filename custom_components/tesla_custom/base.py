@@ -94,29 +94,3 @@ class TeslaCarEntity(TeslaBaseEntity):
             - controller.get_last_wake_up_time(vin=vin)
             > controller.update_interval
         )
-
-
-class TeslaEnergyEntity(TeslaBaseEntity):
-    """Representation of a Tesla energy device."""
-
-    def __init__(
-        self,
-        energysite: EnergySite,
-        coordinator: TeslaDataUpdateCoordinator,
-    ) -> None:
-        """Initialise the Tesla energy device."""
-        energysite_id = energysite.energysite_id
-        super().__init__(energysite_id, coordinator)
-        self._energysite = energysite
-        if energysite.resource_type == RESOURCE_TYPE_BATTERY:
-            sw_version = energysite.version
-        else:
-            # Non-Powerwall sites do not provide version info
-            sw_version = "Unavailable"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, energysite_id)},
-            manufacturer="Tesla",
-            model=energysite.resource_type.title(),
-            name=energysite.site_name,
-            sw_version=sw_version,
-        )

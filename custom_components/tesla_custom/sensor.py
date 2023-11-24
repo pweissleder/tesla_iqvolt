@@ -77,31 +77,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
         entities.append(TeslaCarArrivalTime(car, coordinator))
         entities.append(TeslaCarDistanceToArrival(car, coordinator))
         entities.append(TeslaCarDataUpdateTime(car, coordinator))
-
-    for energy_site_id, energysite in energysites.items():
-        coordinator = coordinators[energy_site_id]
-        if (
-            energysite.resource_type == RESOURCE_TYPE_SOLAR
-            and energysite.has_load_meter
-        ):
-            for sensor_type in SOLAR_SITE_SENSORS:
-                entities.append(
-                    TeslaEnergyPowerSensor(energysite, coordinator, sensor_type)
-                )
-        elif energysite.resource_type == RESOURCE_TYPE_SOLAR:
-            entities.append(
-                TeslaEnergyPowerSensor(energysite, coordinator, "solar power")
-            )
-
-        if energysite.resource_type == RESOURCE_TYPE_BATTERY:
-            entities.append(TeslaEnergyBattery(energysite, coordinator))
-            entities.append(TeslaEnergyBatteryRemaining(energysite, coordinator))
-            entities.append(TeslaEnergyBackupReserve(energysite, coordinator))
-            for sensor_type in BATTERY_SITE_SENSORS:
-                entities.append(
-                    TeslaEnergyPowerSensor(energysite, coordinator, sensor_type)
-                )
-
     async_add_entities(entities, update_before_add=True)
 
 
@@ -164,8 +139,8 @@ class TeslaCarChargerEnergy(TeslaCarEntity, SensorEntity):
         if self._car.charge_miles_added_rated:
             added_range = self._car.charge_miles_added_rated
         elif (
-            self._car.charge_miles_added_ideal
-            and self._car.gui_range_display == "Ideal"
+                self._car.charge_miles_added_ideal
+                and self._car.gui_range_display == "Ideal"
         ):
             added_range = self._car.charge_miles_added_ideal
         else:
@@ -233,60 +208,6 @@ class TeslaCarChargerRate(TeslaCarEntity, SensorEntity):
         }
 
 
-class TeslaCarOdometer(TeslaCarEntity, SensorEntity):
-    """Representation of the Tesla car odometer sensor."""
-
-    type = "odometer"
-    _attr_device_class = SensorDeviceClass.DISTANCE
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_native_unit_of_measurement = LENGTH_MILES
-    _attr_icon = "mdi:counter"
-
-    @property
-    def native_value(self) -> float:
-        """Return the odometer."""
-        odometer_value = self._car.odometer
-
-        if odometer_value is None:
-            return None
-
-        return round(odometer_value, 2)
-
-
-class TeslaCarShiftState(TeslaCarEntity, SensorEntity):
-    """Representation of the Tesla car Shift State sensor."""
-
-    type = "shift state"
-    _attr_device_class = SensorDeviceClass.ENUM
-    _attr_icon = "mdi:car-shift-pattern"
-
-    @property
-    def native_value(self) -> float:
-        """Return the shift state."""
-        value = self._car.shift_state
-
-        # When car is parked and off, Tesla API reports shift_state None
-        if value is None or value == "":
-            return "P"
-
-        return value
-
-    @property
-    def options(self) -> float:
-        """Return the values for the ENUM."""
-        values = ["P", "D", "R", "N"]
-
-        return values
-
-    @property
-    def extra_state_attributes(self):
-        """Return device state attributes."""
-
-        return {
-            "raw_state": self._car.shift_state,
-        }
-
-
 class TeslaCarRange(TeslaCarEntity, SensorEntity):
     """Representation of the Tesla car range sensor."""
 
@@ -330,147 +251,6 @@ class TeslaCarRange(TeslaCarEntity, SensorEntity):
         }
 
 
-class TeslaCarTemp(TeslaCarEntity, SensorEntity):
-    """Representation of a Tesla car temp sensor."""
-
-    type = "temperature"
-    _attr_device_class = SensorDeviceClass.TEMPERATURE
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = TEMP_CELSIUS
-    _attr_icon = "mdi:thermometer"
-
-    def __init__(
-        self,
-        car: TeslaCar,
-        coordinator: TeslaDataUpdateCoordinator,
-        *,
-        inside=False,
-    ) -> None:
-        """Initialize temp entity."""
-        self.inside = inside
-        if inside is True:
-            self.type += " (inside)"
-        else:
-            self.type += " (outside)"
-        super().__init__(car, coordinator)
-
-    @property
-    def native_value(self) -> float:
-        """Return car temperature."""
-        if self.inside is True:
-            return self._car.inside_temp
-        return self._car.outside_temp
-
-
-class TeslaEnergyPowerSensor(TeslaEnergyEntity, SensorEntity):
-    """Representation of a Tesla energy power sensor."""
-
-    _attr_device_class = SensorDeviceClass.POWER
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = POWER_WATT
-
-    def __init__(
-        self,
-        energysite: EnergySite,
-        coordinator: TeslaDataUpdateCoordinator,
-        sensor_type: str,
-    ) -> None:
-        """Initialize power sensor."""
-        self.type = sensor_type
-        if self.type == "solar power":
-            self._attr_icon = "mdi:solar-power-variant"
-        if self.type == "grid power":
-            self._attr_icon = "mdi:transmission-tower"
-        if self.type == "load power":
-            self._attr_icon = "mdi:home-lightning-bolt"
-        if self.type == "battery power":
-            self._attr_icon = "mdi:home-battery"
-        super().__init__(energysite, coordinator)
-
-    @property
-    def native_value(self) -> float:
-        """Return power in Watts."""
-        if self.type == "solar power":
-            return round(self._energysite.solar_power)
-        if self.type == "grid power":
-            return round(self._energysite.grid_power)
-        if self.type == "load power":
-            return round(self._energysite.load_power)
-        if self.type == "battery power":
-            return round(self._energysite.battery_power)
-        return 0
-
-
-class TeslaEnergyBattery(TeslaEnergyEntity, SensorEntity):
-    """Representation of the Tesla energy battery sensor."""
-
-    type = "battery"
-    _attr_device_class = SensorDeviceClass.BATTERY
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = PERCENTAGE
-
-    @staticmethod
-    def has_battery() -> bool:
-        """Return whether the device has a battery."""
-        return True
-
-    @property
-    def native_value(self) -> int:
-        """Return battery level."""
-        return round(self._energysite.percentage_charged)
-
-    @property
-    def icon(self):
-        """Return icon for the battery."""
-        charging = self._energysite.battery_power < -100
-
-        return icon_for_battery_level(
-            battery_level=self.native_value, charging=charging
-        )
-
-
-class TeslaEnergyBatteryRemaining(TeslaEnergyEntity, SensorEntity):
-    """Representation of a Tesla energy battery remaining sensor."""
-
-    type = "battery remaining"
-    _attr_device_class = SensorDeviceClass.ENERGY_STORAGE
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = ENERGY_WATT_HOUR
-
-    @property
-    def native_value(self) -> int:
-        """Return battery energy remaining."""
-        return round(self._energysite.energy_left)
-
-    @property
-    def icon(self):
-        """Return icon for the battery remaining."""
-        charging = self._energysite.battery_power < -100
-
-        return icon_for_battery_level(
-            battery_level=self._energysite.percentage_charged, charging=charging
-        )
-
-
-class TeslaEnergyBackupReserve(TeslaEnergyEntity, SensorEntity):
-    """Representation of a Tesla energy backup reserve sensor."""
-
-    type = "backup reserve"
-    _attr_device_class = SensorDeviceClass.BATTERY
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = PERCENTAGE
-
-    @property
-    def native_value(self) -> int:
-        """Return backup reserve level."""
-        return round(self._energysite.backup_reserve_percent)
-
-    @property
-    def icon(self):
-        """Return icon for the backup reserve."""
-        return icon_for_battery_level(battery_level=self.native_value)
-
-
 class TeslaCarTimeChargeComplete(TeslaCarEntity, SensorEntity):
     """Representation of the Tesla car time charge complete."""
 
@@ -495,13 +275,13 @@ class TeslaCarTimeChargeComplete(TeslaCarEntity, SensorEntity):
 
         if self._car.charging_state == "Charging" and charge_hours > 0:
             new_value = (
-                dt.utcnow()
-                + timedelta(hours=charge_hours)
-                - (dt.utcnow() - self._last_update_time)
+                    dt.utcnow()
+                    + timedelta(hours=charge_hours)
+                    - (dt.utcnow() - self._last_update_time)
             )
             if (
-                self._value is None
-                or abs((new_value - self._value).total_seconds()) >= 60
+                    self._value is None
+                    or abs((new_value - self._value).total_seconds()) >= 60
             ):
                 self._value = new_value
         if self._car.charging_state in ["Charging", "Complete"]:
@@ -521,115 +301,7 @@ class TeslaCarTimeChargeComplete(TeslaCarEntity, SensorEntity):
         }
 
 
-class TeslaCarTpmsPressureSensor(TeslaCarEntity, SensorEntity):
-    """Representation of the Tesla car TPMS Pressure sensor."""
-
-    _attr_device_class = SensorDeviceClass.PRESSURE
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = PRESSURE_BAR
-    _attr_suggested_unit_of_measurement = PRESSURE_PSI
-    _attr_icon = "mdi:gauge-full"
-
-    def __init__(
-        self,
-        car: TeslaCar,
-        coordinator: TeslaDataUpdateCoordinator,
-        tpms_sensor: str,
-    ) -> None:
-        """Initialize TPMS Pressure sensor."""
-        self._tpms_sensor = tpms_sensor
-        self.type = tpms_sensor
-        super().__init__(car, coordinator)
-
-    @property
-    def native_value(self) -> float:
-        """Return TPMS Pressure."""
-        value = getattr(self._car, TPMS_SENSORS.get(self._tpms_sensor))
-        if value is not None:
-            value = round(value, 2)
-        return value
-
-    @property
-    def extra_state_attributes(self):
-        """Return device state attributes."""
-        # pylint: disable=protected-access
-        timestamp = self._car._vehicle_data.get("vehicle_state", {}).get(
-            TPMS_SENSOR_ATTR.get(self._tpms_sensor)
-        )
-
-        return {
-            "tpms_last_seen_pressure_timestamp": timestamp,
-        }
-
-
-class TeslaCarArrivalTime(TeslaCarEntity, SensorEntity):
-    """Representation of the Tesla car route arrival time."""
-
-    type = "arrival time"
-    _attr_device_class = SensorDeviceClass.TIMESTAMP
-    _attr_icon = "mdi:timer-sand"
-    _datetime_value: Optional[datetime] = None
-    _last_known_value: Optional[int] = None
-    _last_update_time: Optional[datetime] = None
-
-    @property
-    def native_value(self) -> Optional[datetime]:
-        """Return route arrival time."""
-        if self._car.active_route_minutes_to_arrival is None:
-            return self._datetime_value
-        min_duration = round(float(self._car.active_route_minutes_to_arrival), 2)
-
-        utcnow = dt.utcnow()
-        if self._last_known_value != min_duration:
-            self._last_known_value = min_duration
-            self._last_update_time = utcnow
-
-        new_value = (
-            utcnow + timedelta(minutes=min_duration) - (utcnow - self._last_update_time)
-        )
-        if (
-            self._datetime_value is None
-            or abs((new_value - self._datetime_value).total_seconds()) >= 60
-        ):
-            self._datetime_value = new_value
-        return self._datetime_value
-
-    @property
-    def extra_state_attributes(self):
-        """Return device state attributes."""
-        car = self._car
-        if car.active_route_traffic_minutes_delay is None:
-            minutes = None
-        else:
-            minutes = round(car.active_route_traffic_minutes_delay, 1)
-
-        return {
-            "Energy at arrival": car.active_route_energy_at_arrival,
-            "Minutes traffic delay": minutes,
-            "Destination": car.active_route_destination,
-            "Minutes to arrival": None
-            if car.active_route_minutes_to_arrival is None
-            else round(float(car.active_route_minutes_to_arrival), 2),
-        }
-
-
-class TeslaCarDistanceToArrival(TeslaCarEntity, SensorEntity):
-    """Representation of the Tesla distance to arrival."""
-
-    type = "distance to arrival"
-    _attr_device_class = SensorDeviceClass.DISTANCE
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_native_unit_of_measurement = LENGTH_MILES
-    _attr_icon = "mdi:map-marker-distance"
-
-    @property
-    def native_value(self) -> float:
-        """Return the distance to arrival."""
-        if self._car.active_route_miles_to_arrival is None:
-            return None
-        return round(self._car.active_route_miles_to_arrival, 2)
-
-
+# TODO: May be removed
 class TeslaCarDataUpdateTime(TeslaCarEntity, SensorEntity):
     """Representation of the TeslajsonPy Last Data Update time."""
 

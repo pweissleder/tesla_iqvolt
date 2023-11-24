@@ -52,17 +52,6 @@ _LOGGER = logging.getLogger(__name__)
 CONFIG_SCHEMA = cv.empty_config_schema(DOMAIN)
 
 
-@callback
-def _async_save_tokens(hass, config_entry, access_token, refresh_token, expiration):
-    hass.config_entries.async_update_entry(
-        config_entry,
-        data={
-            **config_entry.data,
-            CONF_ACCESS_TOKEN: access_token,
-            CONF_TOKEN: refresh_token,
-            CONF_EXPIRATION: expiration,
-        },
-    )
 
 
 @callback
